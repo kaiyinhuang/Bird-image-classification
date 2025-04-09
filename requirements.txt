@@ -1,0 +1,8 @@
+transformers==4.40.0
+datasets==2.19.0
+torch==2.2.0
+torchvision==0.17.0
+evaluate==0.4.2
+peft==0.8.0
+wandb==0.16.6
+pyyaml==6.0.1
