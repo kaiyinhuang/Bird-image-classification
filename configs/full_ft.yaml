@@ -1,0 +1,11 @@
+model_name: "google/vit-base-patch16-224-in21k"
+
+training_args:
+  output_dir: "./outputs/full_ft"
+  per_device_train_batch_size: 16
+  per_device_eval_batch_size: 32
+  num_train_epochs: 10
+  learning_rate: 3e-5
+  fp16: true
+  evaluation_strategy: "epoch"
+  save_strategy: "epoch"
