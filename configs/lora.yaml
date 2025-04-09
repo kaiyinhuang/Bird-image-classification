@@ -1,0 +1,19 @@
+# LoRA 微调专用配置
+model_name: "google/vit-base-patch16-224-in21k"
+
+lora_config:
+  r: 8                          # 秩 (Rank)
+  lora_alpha: 32                # 缩放因子 (Alpha)
+  target_modules: ["query", "value"]  # 目标模块（ViT 的注意力层）
+  lora_dropout: 0.05            # Dropout 比例
+  modules_to_save: ["classifier"]  # 分类层保持全参数训练
+
+training_args:
+  output_dir: "./outputs/lora"  # 输出目录
+  per_device_train_batch_size: 32  # LoRA 显存占用低，可增大批次
+  per_device_eval_batch_size: 64
+  num_train_epochs: 10
+  learning_rate: 1e-4           # LoRA 需要更大学习率
+  fp16: true
+  evaluation_strategy: "epoch"
+  save_strategy: "epoch"
