@@ -1,55 +1,68 @@
 from transformers import ViTForImageClassification, ViTImageProcessor, TrainingArguments, Trainer
 from peft import LoraConfig, get_peft_model
-import evaluate
+from data_loader import load_bird_dataset, extract_label, get_transforms, load_image
 import numpy as np
-import yaml
-from .data_preprocessing import load_bird_dataset, get_transforms
+import torch
+import evaluate
 
-def main(config_path="configs/lora.yaml"):
-    # 加载配置
-    with open(config_path) as f:
-        config = yaml.safe_load(f)
-    
-    # 加载数据集和预处理
-    dataset = load_bird_dataset()
-    train_transform = get_transforms("train")
-    val_transform = get_transforms("val")
-    
-    # 加载基础模型（冻结所有参数）
-    processor = ViTImageProcessor.from_pretrained(config["model_name"])
-    model = ViTForImageClassification.from_pretrained(
-        config["model_name"],
-        num_labels=len(dataset["train"].unique("label")),
-        ignore_mismatched_sizes=True
-    )
-    
-    # 添加 LoRA 适配器
-    lora_config = LoraConfig(
-        r=config["lora_config"]["r"],
-        lora_alpha=config["lora_config"]["lora_alpha"],
-        target_modules=config["lora_config"]["target_modules"],
-        lora_dropout=config["lora_config"]["lora_dropout"],
-        modules_to_save=config["lora_config"]["modules_to_save"],
-        bias="none"
-    )
-    model = get_peft_model(model, lora_config)
-    model.print_trainable_parameters()  # 打印可训练参数占比
-    
-    # 定义 Trainer
-    training_args = TrainingArguments(**config["training_args"])
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-        train_dataset=dataset["train"],
-        eval_dataset=dataset["validation"],
-        compute_metrics=lambda p: {
-            "accuracy": np.mean(np.argmax(p.predictions, axis=1) == p.label_ids)
-        }
-    )
-    
-    # 训练与保存
-    trainer.train()
-    model.save_pretrained(config["training_args"]["output_dir"])
+# 加载数据集（同全参数微调）
+dataset = load_bird_dataset().map(extract_label)
+label_list = dataset["train"].unique("label")
+id2label = {i: label for i, label in enumerate(label_list)}
+label2id = {label: i for i, label in enumerate(label_list)}
 
-if __name__ == "__main__":
-    main()
+# 应用预处理（同全参数微调）
+dataset["train"] = dataset["train"].map(
+    lambda x: load_image(x, get_transforms("train")),
+    batched=False
+)
+dataset["validation"] = dataset["validation"].map(
+    lambda x: load_image(x, get_transforms("val")),
+    batched=False
+)
+
+# 加载基础模型
+model_name = "google/vit-base-patch16-224-in21k"
+processor = ViTImageProcessor.from_pretrained(model_name)
+model = ViTForImageClassification.from_pretrained(
+    model_name,
+    num_labels=len(label_list),
+    id2label=id2label,
+    label2id=label2id,
+    ignore_mismatched_sizes=True
+)
+
+# 添加 LoRA 适配器
+lora_config = LoraConfig(
+    r=8,
+    lora_alpha=32,
+    target_modules=["query", "value"],  # ViT 注意力层的 query 和 value 矩阵
+    lora_dropout=0.05,
+    modules_to_save=["classifier"],      # 分类层保持全参数训练
+    bias="none"
+)
+model = get_peft_model(model, lora_config)
+model.print_trainable_parameters()  # 输出示例: trainable params: 0.5M / 86M (0.58%)
+
+# 定义训练参数（学习率更大）
+training_args = TrainingArguments(
+    output_dir="./outputs/lora",
+    per_device_train_batch_size=32,
+    per_device_eval_batch_size=64,
+    num_train_epochs=10,
+    learning_rate=1e-4,
+    fp16=True,
+    evaluation_strategy="epoch",
+    save_strategy="epoch",
+)
+
+# 训练与保存
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=dataset["train"],
+    eval_dataset=dataset["validation"],
+    compute_metrics=lambda p: {"accuracy": np.mean(np.argmax(p.predictions, axis=1) == p.label_ids)}
+)
+trainer.train()
+model.save_pretrained("./outputs/lora")
