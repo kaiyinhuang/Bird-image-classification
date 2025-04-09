@@ -1,40 +1,64 @@
 from transformers import ViTForImageClassification, ViTImageProcessor, TrainingArguments, Trainer
-from .data_preprocessing import load_bird_dataset, get_transforms
-import evaluate
+from data_loader import load_bird_dataset, extract_label, get_transforms, load_image
 import numpy as np
+import torch
+import evaluate
 
-def main(config_path="configs/full_ft.yaml"):
-    # 加载配置
-    import yaml
-    with open(config_path) as f:
-        config = yaml.safe_load(f)
-    
-    # 数据加载与预处理
-    dataset = load_bird_dataset()
-    train_transform = get_transforms("train")
-    val_transform = get_transforms("val")
-    
-    # 模型加载
-    processor = ViTImageProcessor.from_pretrained(config["model_name"])
-    model = ViTForImageClassification.from_pretrained(
-        config["model_name"],
-        num_labels=len(dataset["train"].unique("label")),
-        ignore_mismatched_sizes=True
-    )
-    
-    # 定义 Trainer
-    training_args = TrainingArguments(**config["training_args"])
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-        train_dataset=dataset["train"],
-        eval_dataset=dataset["validation"],
-        compute_metrics=lambda p: {"accuracy": np.mean(np.argmax(p.predictions, axis=1) == p.label_ids)}
-    )
-    
-    # 训练与保存
-    trainer.train()
-    model.save_pretrained(config["output_dir"])
+# 加载数据集并预处理
+dataset = load_bird_dataset().map(extract_label)
+label_list = dataset["train"].unique("label")
+id2label = {i: label for i, label in enumerate(label_list)}
+label2id = {label: i for i, label in enumerate(label_list)}
 
-if __name__ == "__main__":
-    main()
+# 应用预处理
+dataset["train"] = dataset["train"].map(
+    lambda x: load_image(x, get_transforms("train")),
+    batched=False
+)
+dataset["validation"] = dataset["validation"].map(
+    lambda x: load_image(x, get_transforms("val")),
+    batched=False
+)
+
+# 加载模型
+model_name = "google/vit-base-patch16-224-in21k"
+processor = ViTImageProcessor.from_pretrained(model_name)
+model = ViTForImageClassification.from_pretrained(
+    model_name,
+    num_labels=len(label_list),
+    id2label=id2label,
+    label2id=label2id,
+    ignore_mismatched_sizes=True
+)
+
+# 定义训练参数
+training_args = TrainingArguments(
+    output_dir="./outputs/full_ft",
+    per_device_train_batch_size=16,
+    per_device_eval_batch_size=32,
+    num_train_epochs=10,
+    learning_rate=3e-5,
+    fp16=True,
+    evaluation_strategy="epoch",
+    save_strategy="epoch",
+    logging_dir="./logs",
+    report_to="wandb"
+)
+
+# 定义评估指标
+accuracy = evaluate.load("accuracy")
+def compute_metrics(eval_pred):
+    logits, labels = eval_pred
+    predictions = np.argmax(logits, axis=-1)
+    return accuracy.compute(predictions=predictions, references=labels)
+
+# 训练
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=dataset["train"],
+    eval_dataset=dataset["validation"],
+    compute_metrics=compute_metrics,
+)
+trainer.train()
+model.save_pretrained("./outputs/full_ft")
