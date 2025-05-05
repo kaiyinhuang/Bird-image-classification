@@ -1,8 +1,19 @@
-transformers==4.40.0
-datasets==2.19.0
-torch==2.2.0
-torchvision==0.17.0
-evaluate==0.4.2
-peft==0.8.0
-wandb==0.16.6
-pyyaml==6.0.1
+```txt
+# Core ML Libraries
+torch
+torchvision
+peft # For LoRA
+transformers # PEFT sometimes has dependencies here, or for future use
+huggingface_hub # For model upload/download
+
+# Data Handling & Utilities
+numpy
+pandas # Needed if using the CUB reorganization script or similar data processing
+Pillow # For image loading (PIL)
+
+# Plotting (Optional, for notebooks/analysis)
+matplotlib
+
+# tqdm # (Optional) For progress bars in scripts
+
+# Add other libraries you specifically used, e.g., scikit-learn if used for splits
