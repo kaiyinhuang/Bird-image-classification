@@ -1,0 +1,15 @@
+# Web Framework (choose one)
+# flask
+fastapi
+uvicorn # Needed to run FastAPI
+
+# ML Libraries (needed for inference within the API)
+torch
+torchvision
+peft
+Pillow
+numpy
+
+# Other utilities
+python-multipart # Often needed for file uploads in FastAPI
+# Add any other specific dependencies for your API logic
