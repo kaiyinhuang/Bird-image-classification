@@ -112,6 +112,7 @@ python scripts/train.py \\
 &#x20;   \--lr 1e-4 \\
 
 &#x20;   \--batch\_size 32
+```
 
 
 
