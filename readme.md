@@ -112,4 +112,54 @@ python scripts/train.py \\
 &#x20;   \--lr 1e-4 \\
 
 &#x20;   \--batch\_size 32
-```
+
+
+
+
+The script will load the base model and the LoRA adapter, preprocess the images and make predictions, and output the most likely bird name and the confidence level.
+
+### Model Details
+
+**Base Model**: torchvision.models.resnet50 (pre-trained on ImageNet)
+
+**Fine-tuning Strategy**:
+
+(Optional Initial Stage) Only train the classification head (FC layer) to adapt to the CUB dataset.
+
+On this basis, apply LoRA for parameter-efficient fine-tuning.
+
+**LoRA Configuration (Example)**:
+
+r (Rank): 8
+
+lora\_alpha: 16
+
+target\_modules: \["fc", "conv1", "layer4.0.conv1"] (See the training script/configuration for the specific modules used)
+
+lora\_dropout: 0.05
+
+**Final Model**: The trained LoRA adapter can be found on the Hugging Face Hub:
+
+https://huggingface.co/mibo222/bird_classifier_lora/tree/main/bird_classifier_lora_adapters
+
+### Performance
+
+Achieved approximately 70% Top-1 accuracy on the CUB-200-2011 validation set (i.e., the original test set).
+
+(You may consider inserting the training curve graph here)
+
+### Future Work / TODO
+
+Try more powerful base models (such as EfficientNetV2, ViT).
+
+Experiment with more complex LoRA configurations or fine-tuning strategies.
+
+Implement more comprehensive evaluation metrics (Precision, Recall, F1).
+
+Develop a simple Web API (using Flask/FastAPI) for deployment.
+
+Perform model quantization to optimize the inference speed.
+
+### License
+
+This project is licensed under the MIT license.
