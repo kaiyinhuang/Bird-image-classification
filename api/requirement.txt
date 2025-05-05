@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard] # [standard] 包含常用依赖
+python-multipart
+Pillow
+torch
+torchvision
+peft
+transformers # peft 可能依赖它
+# 如果在 Colab 用了其他库，也加上
